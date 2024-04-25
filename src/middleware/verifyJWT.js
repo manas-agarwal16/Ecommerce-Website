@@ -10,17 +10,18 @@ const verifyJWT = asyncHandler(async (req, res, next) => {
   }
 
   const decodedToken = await jwt.verify(
-    "accessToken",
+    accessToken,
     process.env.ACCESSTOKEN_KEY
   );
 
+  console.log(decodedToken);
   if (!decodedToken) {
     throw new ApiError(501, "error in decoding token");
   }
 
   const user_id = decodedToken._id;
 
-  const user = await User.findOneById({ _id: user._id });
+  const user = await User.findById({ _id: user_id });
 
   if (!user) {
     throw new ApiError(401, "invalid request, user not found");

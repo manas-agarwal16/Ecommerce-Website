@@ -6,7 +6,11 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken";
 
 const registerUser = asyncHandler(async (req, res) => {
+
   const { username, email, fullName, password , address , phnNo } = req.body;
+
+  // console.log(req.body);
+  console.log(username);
 
   if (fullName === "" || username === "" || email === "" || password === "" || address === "" || phnNo === null) {
     throw new ApiError(400, "All fields are required");
@@ -24,6 +28,8 @@ const registerUser = asyncHandler(async (req, res) => {
   const user = new User({
     username: username.toLowerCase(),
     fullName,
+    address,
+    phnNo,
     email: email.toLowerCase(),
     password,
   });

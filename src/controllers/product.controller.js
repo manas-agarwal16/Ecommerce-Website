@@ -33,10 +33,26 @@ const addNewProduct = asyncHandler(async (req, res) => {
   if (!include) {
     throw new ApiError(401, "invalid Category");
   }
+
+  const exists = await Product.aggregate([
+    {
+      $match: {
+        productName: productName.toLowerCase().trim(),
+        companyName: companyName.toLowerCase().trim(),
+      },
+    },
+  ]);
+
+  console.log(exists);
+
+  if (exists.length >= 1) {
+    throw new ApiError(401, "items with same company name already exists");
+  }
+
   const newProduct = new Product({
     user_id: user?._id,
-    productName,
-    companyName,
+    productName: productName.toLowerCase().trim(),
+    companyName: companyName.toLowerCase().trim(),
     category,
     price,
     stock,
@@ -50,7 +66,9 @@ const addNewProduct = asyncHandler(async (req, res) => {
       throw new ApiError(501, "error in adding new product to db", err);
     });
 
-  res.status(201).json(new ApiResponse(201, "new product added successfully"));
+  res
+    .status(201)
+    .json(new ApiResponse(201, newProduct, "new product added successfully"));
 });
 
 const getRandomProducts = asyncHandler(async (req, res) => {
@@ -58,15 +76,24 @@ const getRandomProducts = asyncHandler(async (req, res) => {
 
   console.log(products);
 
-  const randomProducts = [];
-  for (let i = 1; i < products.length && i <= 5; i++) {
-    const index = Math.floor(Math.random() * products.length);
-    randomProducts.push(products[index]);
+  let randomProducts = [];
+  if (products.length > 5) {
+    for (let i = 1; i <= 5; i++) {
+      const index = Math.floor(Math.random() * products.length);
+      randomProducts.push(products[index]);
+    }
+  } else {
+    randomProducts = products;
   }
-
   res
     .status(201)
-    .json(new ApiResponse(201, "random products fetched successfully!!!"));
+    .json(
+      new ApiResponse(
+        201,
+        randomProducts,
+        "random products fetched successfully!!!"
+      )
+    );
 });
 
 const getProductsByCategory = asyncHandler(async (req, res) => {
@@ -104,36 +131,49 @@ const getProductsByCategory = asyncHandler(async (req, res) => {
 });
 
 const orderProduct = asyncHandler(async (req, res) => {
-  const { product_id } = req.body;
+  const { product_id, quantity } = req.body;
+
+  if (!product_id || !quantity) {
+    throw new ApiError(401, "all fields required!!");
+  }
   const user = req.user;
 
   if (!user) {
     throw new ApiError(501, "invalid request");
   }
-  if (!product_id) {
-    throw new ApiError(401, "product_id is required");
-  }
+
   let product = await Product.findById({ _id: product_id });
 
   if (!product) {
     throw new ApiError(401, "product does not exist with product_id");
   }
 
-  const currentStock = product.stock - 1;
-  if (product.stock <= 0) {
+  if (product.stock === 0) {
     return res
       .status(201)
-      .json(new ApiResponse(201, "currently product is out of stock "));
+      .json(new ApiResponse(201, "currently product is out of stock"));
+  }
+  const currentStock = product.stock - quantity;
+  console.log("current Stock", currentStock);
+  if (product.stock < 0) {
+    return res
+      .status(201)
+      .json(
+        new ApiResponse(201, `${quantity} of this product are not available`)
+      );
   }
 
   product = await Product.findByIdAndUpdate(
     { _id: product_id },
-    { stock: currentStock }
+    { stock: currentStock },
+    { new: true } //returns the updated document
   );
 
+  console.log(product);
   const newOrder = new Order({
     user_id: user._id,
     product_id: product_id,
+    quantity: quantity,
   });
 
   newOrder
@@ -145,7 +185,9 @@ const orderProduct = asyncHandler(async (req, res) => {
       throw new ApiError(501, "error in saving new order to db", err);
     });
 
-  res.status(201).json(new ApiResponse(201, "order is placed successfully"));
+  res
+    .status(201)
+    .json(new ApiResponse(201, {"Your Order" : product , "quantity" : quantity}, "order is placed successfully"));
 });
 
 const addToCart = asyncHandler(async (req, res) => {
@@ -165,6 +207,14 @@ const addToCart = asyncHandler(async (req, res) => {
     throw new ApiError(401, "no such product exists with product_id");
   }
 
+  const exists = await Cart.findOne({ product_id: product_id });
+
+  if (Object.keys(exists).length != 0) {
+    return res
+      .status(201)
+      .json(new ApiResponse(201, "product is already added to cart"));
+  }
+
   const newProductToCart = new Cart({
     user_id: user._id,
     product_id: product_id,
@@ -181,7 +231,7 @@ const addToCart = asyncHandler(async (req, res) => {
 
   res
     .status(201)
-    .json(new ApiResponse(201, "product added to card successfully"));
+    .json(new ApiResponse(201, product, "product added to card successfully"));
 });
 
 const myOrders = asyncHandler(async (req, res) => {
@@ -189,7 +239,7 @@ const myOrders = asyncHandler(async (req, res) => {
   if (!user) {
     throw new ApiError(501, "invalid request");
   }
-  const Orders = await Order.aggregate([
+  const orders = await Order.aggregate([
     {
       $match: {
         user_id: new mongoose.Types.ObjectId(user?._id),
@@ -200,13 +250,26 @@ const myOrders = asyncHandler(async (req, res) => {
         from: "products",
         localField: "product_id",
         foreignField: "_id",
-        as: "UserOrders",
+        as: "userOrders",
       },
     },
+    {
+      $project: {
+        userOrders: 1,
+        quantity: 1,
+      },
+    },
+    {
+      $unwind: "$userOrders",
+    },
   ]);
-  console.log(Orders);
+  // console.log(Orders[0].allUserOrders);
+  // const userOrders = Orders[0].allUserOrders;
+  console.log(orders);
 
-  res.json({ message: "hello" });
+  return res
+    .status(201)
+    .json(new ApiResponse(201, orders , "user orders fetched successfully"));
 });
 
 export {

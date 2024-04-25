@@ -10,7 +10,11 @@ const orderSchema = new mongoose.Schema({
         type : mongoose.Schema.Types.ObjectId,
         ref : "products",
         require : true,
+    },
+    quantity : {
+        type : Number,
+        default : 0,
     }
-});
+},{timestamps : true});
 
 export const Order = mongoose.model("Order",orderSchema);
