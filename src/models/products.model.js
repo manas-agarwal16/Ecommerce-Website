@@ -14,6 +14,10 @@ const productSchema = new mongoose.Schema(
       type: String,
       require: true,
     },
+    productImages : {
+      type : Array,
+      require : true,
+    },
     category: {
       type: String,
       enum: [

@@ -4,8 +4,8 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { Order } from "../models/order.model.js";
 import { Cart } from "../models/cart.model.js";
-import { User } from "../models/users.model.js";
 import mongoose from "mongoose";
+import { uploadOncloudinary } from "../utils/cloudinary.js";
 
 const categories = [
   "Electronics",
@@ -20,9 +20,12 @@ const categories = [
 
 const addNewProduct = asyncHandler(async (req, res) => {
   const user = req.user;
+  // console.log(req.user);
   if (!user) {
     throw new ApiError(501, "invalid request!!!");
   }
+
+  // console.log(req.body);
 
   const { productName, companyName, category, price, stock } = req.body;
   if (!productName || !companyName || !category || !price || !stock) {
@@ -43,10 +46,36 @@ const addNewProduct = asyncHandler(async (req, res) => {
     },
   ]);
 
-  console.log(exists);
-
   if (exists.length >= 1) {
     throw new ApiError(401, "items with same company name already exists");
+  }
+
+  const productImages = req.files;
+  console.log(req.files);
+  if (productImages.length === 0) {
+    throw new ApiError(401, "atleat one image is required in productImage");
+  }
+  if (productImages.length > 12) {
+    throw new ApiError(401, "12 is the limit of productImage");
+  }
+
+  const arrayLocalPath = [];
+  // console.log(productImages[0]?.path);
+  for (let i = 0; i < productImages.length; i++) {
+    arrayLocalPath.push(productImages[i]?.path);
+  }
+
+  console.log(arrayLocalPath[0]);
+
+  const productImageCloudinaryURL = [];
+  for (let i = 0; i < arrayLocalPath.length; i++) {
+    const result = await uploadOncloudinary(arrayLocalPath[i]);
+    console.log(result);
+    if (!result) {
+      console.log("error in uploading file to cloudinary!!");
+    }
+
+    productImageCloudinaryURL.push(result.url);
   }
 
   const newProduct = new Product({
@@ -56,7 +85,9 @@ const addNewProduct = asyncHandler(async (req, res) => {
     category,
     price,
     stock,
+    productImages: productImageCloudinaryURL,
   });
+
   newProduct
     .save()
     .then(() => {
@@ -187,7 +218,13 @@ const orderProduct = asyncHandler(async (req, res) => {
 
   res
     .status(201)
-    .json(new ApiResponse(201, {"Your Order" : product , "quantity" : quantity}, "order is placed successfully"));
+    .json(
+      new ApiResponse(
+        201,
+        { "Your Order": product, quantity: quantity },
+        "order is placed successfully"
+      )
+    );
 });
 
 const addToCart = asyncHandler(async (req, res) => {
@@ -269,7 +306,7 @@ const myOrders = asyncHandler(async (req, res) => {
 
   return res
     .status(201)
-    .json(new ApiResponse(201, orders , "user orders fetched successfully"));
+    .json(new ApiResponse(201, orders, "user orders fetched successfully"));
 });
 
 export {
