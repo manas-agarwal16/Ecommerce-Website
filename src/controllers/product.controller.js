@@ -6,16 +6,18 @@ import { Order } from "../models/order.model.js";
 import { Cart } from "../models/cart.model.js";
 import mongoose from "mongoose";
 import { uploadOncloudinary } from "../utils/cloudinary.js";
+import { assignToDeliveryBoy } from "../utils/AssignToDeliveryBoy.js";
+import { DeliveryBoy } from "../models/deliveryBoy.model.js";
 
 const categories = [
-  "Electronics",
-  "Clothing",
-  "Books",
-  "Home & Kitchen",
-  "Toys",
-  "Beauty",
-  "Sports",
-  "Others",
+  "electronics",
+  "clothing",
+  "books",
+  "home & kitchen",
+  "toys",
+  "beauty",
+  "sports",
+  "others",
 ];
 
 const addNewProduct = asyncHandler(async (req, res) => {
@@ -32,7 +34,7 @@ const addNewProduct = asyncHandler(async (req, res) => {
     throw new ApiError(401, "All fields required!!!");
   }
 
-  const include = categories.includes(category);
+  const include = categories.includes(category.toLowerCase().trim());
   if (!include) {
     throw new ApiError(401, "invalid Category");
   }
@@ -74,7 +76,6 @@ const addNewProduct = asyncHandler(async (req, res) => {
     if (!result) {
       console.log("error in uploading file to cloudinary!!");
     }
-
     productImageCloudinaryURL.push(result.url);
   }
 
@@ -129,7 +130,7 @@ const getRandomProducts = asyncHandler(async (req, res) => {
 
 const getProductsByCategory = asyncHandler(async (req, res) => {
   const category = req.params?.category;
-  const include = categories.includes(category);
+  const include = categories.includes(category.toLowerCase().trim());
   if (!include) {
     throw new ApiError(401, "invalid category");
   }
@@ -137,7 +138,7 @@ const getProductsByCategory = asyncHandler(async (req, res) => {
   const categoryProducts = await Product.aggregate([
     {
       $match: {
-        category: category,
+        category: category.toLowerCase().trim(),
       },
     },
   ]);
@@ -163,7 +164,7 @@ const getProductsByCategory = asyncHandler(async (req, res) => {
 
 const orderProduct = asyncHandler(async (req, res) => {
   const { product_id, quantity } = req.body;
-
+  console.log("here", product_id, quantity);
   if (!product_id || !quantity) {
     throw new ApiError(401, "all fields required!!");
   }
@@ -201,13 +202,15 @@ const orderProduct = asyncHandler(async (req, res) => {
   );
 
   console.log(product);
-  const newOrder = new Order({
+  let newOrder = new Order({
     user_id: user._id,
     product_id: product_id,
     quantity: quantity,
+    address: user.address,
+    //orderStatus default in pending
   });
 
-  newOrder
+  await newOrder
     .save()
     .then(() => {
       console.log("product added in orders successfully");
@@ -215,6 +218,20 @@ const orderProduct = asyncHandler(async (req, res) => {
     .catch((err) => {
       throw new ApiError(501, "error in saving new order to db", err);
     });
+
+  const delivery = await assignToDeliveryBoy(newOrder._id);
+  console.log(delivery);
+  if (delivery === "Ordered assigned to delivery Boy successfully") {
+    const updateStatusToPlaced = await Order.findByIdAndUpdate(
+      { _id: newOrder._id },
+      { orderStatus: "placed" },
+      { new: true }
+    );
+    console.log(updateStatusToPlaced);
+    if (!updateStatusToPlaced) {
+      throw new ApiError(501, "error in updating status of order to placed.");
+    }
+  }
 
   res
     .status(201)
@@ -287,18 +304,54 @@ const myOrders = asyncHandler(async (req, res) => {
         from: "products",
         localField: "product_id",
         foreignField: "_id",
-        as: "userOrders",
+        as: "userOrder",
       },
+    },
+    {
+      $lookup: {
+        from: "deliveryboyorders",
+        localField: "_id",
+        foreignField: "order_id",
+        as: "deliveryBoyOrder", //using subpipeline 
+        pipeline : [
+          {//now u r under deliveryBoyOrders model
+            $lookup : {
+              from : "deliveryboys",
+              localField : "deliveryBoy_id",
+              foreignField : "_id",
+              as : "yourDeliveryBoy",
+              pipeline : [ //again using subpipeline to only fetch some data from the deliveryBoys document
+                {
+                  $project : {
+                    fullName : 1,
+                    email : 1,
+                    phnNo : 1,
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+    },
+    {
+      $unwind: "$userOrder",
+    },
+    {
+      $unwind: "$deliveryBoyOrder",
     },
     {
       $project: {
-        userOrders: 1,
-        quantity: 1,
+        userOrder: 1, // actually here 1 means the same see quantity
+        quantity: "$quantity", //'$' sign
+        address: 1,
+        yourDeliveryBoy : "$deliveryBoyOrder.yourDeliveryBoy"
       },
     },
     {
-      $unwind: "$userOrders",
+      $unwind : "$yourDeliveryBoy",
     },
+   
   ]);
   // console.log(Orders[0].allUserOrders);
   // const userOrders = Orders[0].allUserOrders;
@@ -309,6 +362,101 @@ const myOrders = asyncHandler(async (req, res) => {
     .json(new ApiResponse(201, orders, "user orders fetched successfully"));
 });
 
+const getByProductName = asyncHandler(async (req, res) => {
+  const { productName } = req.params;
+  console.log(req.params);
+  if (!productName) {
+    throw new ApiError(401, "product Name is required");
+  }
+
+  const items = await Product.aggregate([
+    {
+      $match: {
+        productName: productName.toLowerCase().trim(),
+      },
+    },
+  ]);
+  if (items.length === 0) {
+    return res
+      .status(201)
+      .json(new ApiResponse(201, "sorry we dont have your product"));
+  }
+
+  res
+    .status(201)
+    .json(
+      new ApiResponse(201, items, `All ${productName} fetched successfully`)
+    );
+});
+
+const getProductsByCompanyName = asyncHandler(async (req, res) => {
+  const { companyName } = req.params;
+  if (!companyName) {
+    throw new ApiError(401, "product name is required");
+  }
+  const items = await Product.aggregate([
+    {
+      $match: {
+        companyName: companyName.toLowerCase().trim(),
+      },
+    },
+  ]);
+
+  if (items.length === 0) {
+    return res.status.json(
+      new ApiResponse(201, `no product found of this ${companyName}`)
+    );
+  }
+  res
+    .status(201)
+    .json(
+      new ApiResponse(
+        201,
+        items,
+        `all products of ${companyName} fetched successfully`
+      )
+    );
+});
+
+const getByProductNameAndCompanyName = asyncHandler(async (req, res) => {
+  const { productName, companyName } = req.params;
+  console.log(req.params);
+
+  if (!productName || !companyName) {
+    throw new ApiError("all fields required");
+  }
+  const items = await Product.aggregate([
+    {
+      $match: {
+        productName: productName.toLowerCase().trim(),
+        companyName: companyName.toLowerCase().trim(),
+      },
+    },
+  ]);
+
+  if (items.length === 0) {
+    res
+      .status(201)
+      .json(
+        new ApiResponse(
+          201,
+          `sorry we dont have this product of ${companyName
+            .toLowerCase()
+            .trim()}`
+        )
+      );
+  }
+  res
+    .status(201)
+    .json(
+      new ApiResponse(
+        201,
+        items,
+        `product of ${companyName} fetched successfully`
+      )
+    );
+});
+
 export {
   addNewProduct,
   getRandomProducts,
@@ -316,4 +464,7 @@ export {
   orderProduct,
   addToCart,
   myOrders,
+  getByProductNameAndCompanyName,
+  getProductsByCompanyName,
+  getByProductName,
 };

@@ -10,8 +10,10 @@ app.use(express.static("public"));
 
 import userRouter from "./routes/user.route.js";
 import productRouter from "./routes/product.route.js";
+import deliveryRouter from "./routes/delivery.route.js"
 
 app.use("/api/users", userRouter);
 app.use("/api/product", productRouter);
+app.use("/api/delivery-boy",deliveryRouter);
 
 export { app };

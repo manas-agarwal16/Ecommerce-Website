@@ -14,6 +14,15 @@ const orderSchema = new mongoose.Schema({
     quantity : {
         type : Number,
         default : 0,
+    },
+    address : {
+        type : String,
+        require : true,
+    },
+    orderStatus : {
+        type : String,
+        enum : ["pending","placed"],
+        default : "pending",
     }
 },{timestamps : true});
 

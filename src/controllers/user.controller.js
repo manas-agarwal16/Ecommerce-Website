@@ -4,15 +4,22 @@ import { User } from "../models/users.model.js"; // User has all access to DB.
 import bcrypt from "bcrypt";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken";
+import { generateOTP, sendOTPThroughEmail } from "../utils/OTP.js";
 
 const registerUser = asyncHandler(async (req, res) => {
-
-  const { username, email, fullName, password , address , phnNo } = req.body;
+  const { username, email, fullName, password, address, phnNo } = req.body;
 
   // console.log(req.body);
   console.log(username);
 
-  if (fullName === "" || username === "" || email === "" || password === "" || address === "" || phnNo === null) {
+  if (
+    fullName === "" ||
+    username === "" ||
+    email === "" ||
+    password === "" ||
+    address === "" ||
+    phnNo === null
+  ) {
     throw new ApiError(400, "All fields are required");
   }
 
@@ -55,9 +62,51 @@ const registerUser = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, createdUser, "User registered successfully!"));
 });
 
+const sendOTP = asyncHandler(async (req, res) => {
+  const OTP = generateOTP();
+  console.log(OTP);
+  const user = req.user;
+  const update = await User.findByIdAndUpdate({ _id: user._id }, { OTP: OTP });
+  if (!update) {
+    throw new ApiError(401, "user not found");
+  }
+  console.log(user.email);
+  sendOTPThroughEmail(user.email, OTP);
+
+  res.status(201).json(new ApiResponse(201, "OTP has sent to your email"));
+});
+
+const verifyOTP = asyncHandler(async (req, res) => {
+  const { OTP } = req.body;
+  const user = req.user;
+  console.log(OTP);
+
+  if (!OTP) {
+    throw new ApiResponse(201, "OTP is required");
+  }
+
+  const dbOTP = user.OTP
+
+  if (!dbOTP) {
+    throw new ApiError(401, "invalid request");
+  }
+
+  if (dbOTP !== OTP) {
+    return res.status(201).json(new ApiResponse(201, "wrong OTP"));
+  }
+
+  const resetOTPT = await User.findByIdAndUpdate(
+    { _id: user._id },
+    { OTP: null }
+  );
+
+  res.status(201).json(new ApiResponse(201, "OTP verified successfully"));
+});
+
 const loginUser = asyncHandler(async (req, res) => {
   const { username, email, password } = req.body;
 
+  console.log(req.body);
   if ((!username && !email) || !password) {
     throw new ApiError(400, "All fields are required.");
   }
@@ -85,13 +134,19 @@ const loginUser = asyncHandler(async (req, res) => {
     throw new ApiError(500, "error in creating refresh token");
   }
 
-  const result = await User.findOneAndUpdate(
+  let result = await User.findOneAndUpdate(
     { username },
     { refreshToken: refreshToken }
   );
-
+  console.log(result);
   if (!result) {
-    throw new ApiError(501, "error in saving refreshToken to db");
+    result = await User.findOneAndUpdate(
+      { email },
+      { refreshToken: refreshToken }
+    );
+    if (!result) {
+      throw new ApiError(501, "error in saving refreshToken to db");
+    }
   }
   const options = {
     httpOnly: true, // only server can access cookie not client side.
@@ -282,4 +337,6 @@ export {
   refreshAccessToken,
   updateUserDetails,
   changeCurrentUserPassword,
+  sendOTP,
+  verifyOTP,
 };
