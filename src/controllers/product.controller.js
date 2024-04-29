@@ -39,22 +39,22 @@ const addNewProduct = asyncHandler(async (req, res) => {
     throw new ApiError(401, "invalid Category");
   }
 
-  const exists = await Product.aggregate([
-    {
-      $match: {
-        productName: productName.toLowerCase().trim(),
-        companyName: companyName.toLowerCase().trim(),
-      },
-    },
-  ]);
+  // const exists = await Product.aggregate([
+  //   {
+  //     $match: {
+  //       productName: productName.toLowerCase().trim(),
+  //       companyName: companyName.toLowerCase().trim(),
+  //     },
+  //   },
+  // ]);
 
-  if (exists.length >= 1) {
-    throw new ApiError(401, "items with same company name already exists");
-  }
+  // if (exists.length >= 1) {
+  //   throw new ApiError(401, "items with same company name already exists");
+  // }
 
   const productImages = req.files;
   console.log(req.files);
-  if (productImages.length === 0) {
+  if (!productImages || productImages.length === 0) {
     throw new ApiError(401, "atleat one image is required in productImage");
   }
   if (productImages.length > 12) {
@@ -164,7 +164,7 @@ const getProductsByCategory = asyncHandler(async (req, res) => {
 
 const orderProduct = asyncHandler(async (req, res) => {
   const { product_id, quantity } = req.body;
-  console.log("here", product_id, quantity);
+  console.log( product_id, quantity);
   if (!product_id || !quantity) {
     throw new ApiError(401, "all fields required!!");
   }
@@ -312,26 +312,28 @@ const myOrders = asyncHandler(async (req, res) => {
         from: "deliveryboyorders",
         localField: "_id",
         foreignField: "order_id",
-        as: "deliveryBoyOrder", //using subpipeline 
-        pipeline : [
-          {//now u r under deliveryBoyOrders model
-            $lookup : {
-              from : "deliveryboys",
-              localField : "deliveryBoy_id",
-              foreignField : "_id",
-              as : "yourDeliveryBoy",
-              pipeline : [ //again using subpipeline to only fetch some data from the deliveryBoys document
+        as: "deliveryBoyOrder", //using subpipeline
+        pipeline: [
+          {
+            //now u r under deliveryBoyOrders model
+            $lookup: {
+              from: "deliveryboys",
+              localField: "deliveryBoy_id",
+              foreignField: "_id",
+              as: "yourDeliveryBoy",
+              pipeline: [
+                //again using subpipeline to only fetch some data from the deliveryBoys document
                 {
-                  $project : {
-                    fullName : 1,
-                    email : 1,
-                    phnNo : 1,
-                  }
-                }
-              ]
-            }
-          }
-        ]
+                  $project: {
+                    fullName: 1,
+                    email: 1,
+                    phnNo: 1,
+                  },
+                },
+              ],
+            },
+          },
+        ],
       },
     },
     {
@@ -345,13 +347,12 @@ const myOrders = asyncHandler(async (req, res) => {
         userOrder: 1, // actually here 1 means the same see quantity
         quantity: "$quantity", //'$' sign
         address: 1,
-        yourDeliveryBoy : "$deliveryBoyOrder.yourDeliveryBoy"
+        yourDeliveryBoy: "$deliveryBoyOrder.yourDeliveryBoy",
       },
     },
     {
-      $unwind : "$yourDeliveryBoy",
+      $unwind: "$yourDeliveryBoy",
     },
-   
   ]);
   // console.log(Orders[0].allUserOrders);
   // const userOrders = Orders[0].allUserOrders;
@@ -457,6 +458,94 @@ const getByProductNameAndCompanyName = asyncHandler(async (req, res) => {
     );
 });
 
+const updateProductDetails = asyncHandler(async (req, res) => {
+  const owner = req.user;
+  const {
+    oldProductName,
+    oldCompanyName,
+    newProductName,
+    newCompanyName,
+    category,
+  } = req.body;
+
+  if (
+    !oldCompanyName ||
+    !oldProductName ||
+    !newCompanyName ||
+    !newProductName ||
+    category
+  ) {
+    throw new ApiError(401, "all fields required");
+  }
+  const exists = await Product.aggregate([
+    {
+      $match: {
+        productName: oldProductName,
+        companyName: oldCompanyName,
+      },
+    },
+  ]);
+
+  if (exists.length === 0) {
+    throw new ApiError(401, "no such product found");
+  }
+
+  if (exists[0].owner !== owner) {
+    throw new ApiError(401, "Wrong owner name or Invalid request");
+  }
+
+  const update = await Product.findOneAndUpdate(
+    { productName: oldProductName, companyName: oldCompanyName },
+    {
+      $set: {
+        //if updating multiple fields $set in necessary
+        category: category,
+        productName: newProductName,
+        companyName: newCompanyName,
+      },
+    },
+    { new: true }
+  );
+
+  if (!update) {
+    throw new ApiError(501, "error in updating product details");
+  }
+
+  res
+    .status(201)
+    .json(
+      new ApiResponse(201, update, "Your product details updated successfully")
+    );
+});
+
+const getProductDetails = asyncHandler(async (req, res) => {
+  const owner = req.user;
+  const { productName, companyName } = req.body;
+  if (!productName || !companyName) {
+    throw new ApiError(401, "all fields required");
+  }
+  if (!owner) {
+    throw new ApiError(401, "invalid request");
+  }
+
+  const ownerProduct = await Product.findOne({
+    owner: owner,
+    productName: productName,
+    companyName: companyName,
+  });
+
+  if (!ownerProduct) {
+    throw new ApiError(401, "No such product found or theres no product of yours");
+  }
+
+  res
+    .status(201)
+    .json(
+      new ApiResponse(201, ownerProduct, "your product fetched successfully")
+    );
+});
+
+
 export {
   addNewProduct,
   getRandomProducts,
@@ -467,4 +556,6 @@ export {
   getByProductNameAndCompanyName,
   getProductsByCompanyName,
   getByProductName,
+  getProductDetails,
+  updateProductDetails
 };

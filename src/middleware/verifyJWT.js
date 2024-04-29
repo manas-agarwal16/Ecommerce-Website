@@ -34,6 +34,7 @@ const verifyJWT = asyncHandler(async (req, res, next) => {
 
 const verifyJWTDeliveryBoy = asyncHandler(async (req, res, next) => {
   const { accessToken } = req.cookies;
+  console.log("here");
   if (!accessToken) {
     throw new ApiError(401, "Invalid request");
   }

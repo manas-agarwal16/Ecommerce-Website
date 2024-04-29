@@ -45,6 +45,5 @@ const productSchema = new mongoose.Schema(
 );
 
 //compound index to store only unique productName with same companyName;
-productSchema.index({ productName: 1, companyName: 1 }, { unique: true });
 
 export const Product = mongoose.model("Product", productSchema);

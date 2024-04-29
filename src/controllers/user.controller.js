@@ -71,7 +71,10 @@ const sendOTP = asyncHandler(async (req, res) => {
     throw new ApiError(401, "user not found");
   }
   console.log(user.email);
-  sendOTPThroughEmail(user.email, OTP);
+  const result = sendOTPThroughEmail(user.email, OTP);
+  if (!result) {
+    throw new ApiError(401, "email address is invalid or does not exists");
+  }
 
   res.status(201).json(new ApiResponse(201, "OTP has sent to your email"));
 });
@@ -82,10 +85,10 @@ const verifyOTP = asyncHandler(async (req, res) => {
   console.log(OTP);
 
   if (!OTP) {
-    throw new ApiResponse(201, "OTP is required");
+    throw new ApiError(401, "OTP is required");
   }
 
-  const dbOTP = user.OTP
+  const dbOTP = user.OTP;
 
   if (!dbOTP) {
     throw new ApiError(401, "invalid request");
@@ -95,10 +98,14 @@ const verifyOTP = asyncHandler(async (req, res) => {
     return res.status(201).json(new ApiResponse(201, "wrong OTP"));
   }
 
-  const resetOTPT = await User.findByIdAndUpdate(
+  const resetOTP = await User.findByIdAndUpdate(
     { _id: user._id },
-    { OTP: null }
+    { OTP: null },
+    { new: true }
   );
+  if (!resetOTP) {
+    throw new ApiError(501, "error in reseting OTP");
+  }
 
   res.status(201).json(new ApiResponse(201, "OTP verified successfully"));
 });
@@ -296,7 +303,7 @@ const changeCurrentUserPassword = asyncHandler(async (req, res) => {
     .json(
       new ApiResponse(
         201,
-        { username: user.username },
+        { email: user.email },
         "your password has being changed successfully!!"
       )
     );
@@ -329,6 +336,8 @@ const updateUserDetails = asyncHandler(async (req, res) => {
       )
     );
 });
+
+
 
 export {
   registerUser,

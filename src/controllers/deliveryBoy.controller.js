@@ -7,9 +7,15 @@ import { DeliveryBoyOrder } from "../models/deliveryBoyOrder.model.js";
 import { assignToDeliveryBoy } from "../utils/AssignToDeliveryBoy.js";
 
 const registerDeliveryBoy = asyncHandler(async (req, res) => {
+  
   const { fullName, email, phnNo, password } = req.body;
-  if (!fullName || !email || !phnNo) {
+  if (!fullName || !email || !phnNo || !password)  {
     throw new ApiError(401, "all fields required");
+  }
+
+  let existedDeliveryBoy = await DeliveryBoy.find({ email }); //returns array
+  if (existedDeliveryBoy.length !== 0) {
+    throw new ApiError(409, "email already exists");
   }
 
   let newDeliveryBoY = new DeliveryBoy({
@@ -19,12 +25,7 @@ const registerDeliveryBoy = asyncHandler(async (req, res) => {
     password,
   });
 
-  let existedDeliveryBoy = await DeliveryBoy.find({ email }); //returns array
-  if (existedDeliveryBoy.length !== 0) {
-    throw new ApiError(409, "email already exists");
-  }
-
-  newDeliveryBoY = await newDeliveryBoY.save().then(() => {
+  await newDeliveryBoY.save().then(() => {
     console.log("You are registered as delivery Boy successfully");
     res
       .status(201)
@@ -35,7 +36,57 @@ const registerDeliveryBoy = asyncHandler(async (req, res) => {
           "You r registered as delivery boy successfully!"
         )
       );
-  });
+  }).catch(err => {
+    throw new ApiError(501,"error in registering delivery boy.");
+  })
+});
+
+const sendOTP = asyncHandler(async (req, res) => {
+  const OTP = generateOTP();
+  console.log(OTP);
+  const deliveryBoy = req.deliveryBoy;
+  const update = await DeliveryBoy.findByIdAndUpdate({ _id: deliveryBoy._id }, { OTP: OTP });
+  if (!update) {
+    throw new ApiError(401, "user not found");
+  }
+  console.log(deliveryBoy.email);
+  const result = sendOTPThroughEmail(deliveryBoy.email, OTP);
+  if (!result) {
+    throw new ApiError(401, "email address is invalid or does not exists");
+  }
+
+  res.status(201).json(new ApiResponse(201, "OTP has sent to your email"));
+});
+
+const verifyOTP = asyncHandler(async (req, res) => {
+  const { OTP } = req.body;
+  const deliveryBoy = req.deliveryBoy;
+  console.log(OTP);
+
+  if (!OTP) {
+    throw new ApiError(401, "OTP is required");
+  }
+
+  const dbOTP = deliveryBoy.OTP;
+
+  if (!dbOTP) {
+    throw new ApiError(401, "invalid request");
+  }
+
+  if (dbOTP !== OTP) {
+    return res.status(201).json(new ApiResponse(201, "wrong OTP"));
+  }
+
+  const resetOTP = await deliveryBoy.findByIdAndUpdate(
+    { _id: deliveryBoy._id },
+    { OTP: null },
+    { new: true }
+  );
+  if (!resetOTP) {
+    throw new ApiError(501, "error in reseting OTP");
+  }
+
+  res.status(201).json(new ApiResponse(201, "OTP verified successfully"));
 });
 
 const loginDeliveryBoy = asyncHandler(async (req, res) => {
@@ -227,14 +278,14 @@ const myDeliveryOrders = asyncHandler(async (req, res) => {
       },
     },
     {
-        $unwind : "$user",
+      $unwind: "$user",
     },
     {
-        $project : {
-            "yourOrder.user_id" : 0,
-            "yourOrder.product_id" : 0, 
-        }
-    }
+      $project: {
+        "yourOrder.user_id": 0,
+        "yourOrder.product_id": 0,
+      },
+    },
   ]);
   console.log(yourOrder);
   res
@@ -249,4 +300,6 @@ export {
   loginDeliveryBoy,
   orderComplete,
   myDeliveryOrders,
+  sendOTP,
+  verifyOTP
 };

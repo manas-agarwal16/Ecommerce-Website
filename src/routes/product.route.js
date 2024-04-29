@@ -13,6 +13,8 @@ import {
   getByProductNameAndCompanyName,
   getByProductName,
   getProductsByCompanyName,
+  getProductDetails,
+  updateProductDetails,
 } from "../controllers/product.controller.js";
 
 router
@@ -23,8 +25,11 @@ router.route("/add-to-cart").post(verifyJWT, addToCart);
 router.route("/get-random-products").get(getRandomProducts);
 router.route("/category/:category").get(getProductsByCategory); //here :category is the placeholder for category and u can access it using req.params.category.(colon is used to pass data through req.)
 router.route("/my-orders").get(verifyJWT, myOrders);
-router.route("/get-products-b/:productName/:companyName").get(getByProductNameAndCompanyName);
+router
+  .route("/get-products-b/:productName/:companyName")
+  .get(getByProductNameAndCompanyName);
 router.route("/get-products-p/:productName").get(getByProductName);
 router.route("/get-products-c/:companyName").get(getProductsByCompanyName);
-
+router.route("/product-details").get(verifyJWT, getProductDetails);
+router.route("/update-product-details").post(verifyJWT, updateProductDetails);
 export default router;
