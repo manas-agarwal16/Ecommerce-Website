@@ -25,6 +25,11 @@ const userSchema = new mongoose.Schema({
     type: String,
     require: true,
   },
+  status : {
+    type : String,
+    enum : ["verified" , "pending"],
+    default : "pending",
+  },
   phnNo: {
     type : Number,
     require : true,
@@ -59,7 +64,6 @@ userSchema.methods.generateAccessToken = async function () {
   return jwt.sign(
     {
       _id: this._id,
-      username: this.username,
       email: this.email,
     },
     process.env.ACCESSTOKEN_KEY,

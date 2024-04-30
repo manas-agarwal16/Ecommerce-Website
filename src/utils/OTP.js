@@ -20,7 +20,8 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-const sendOTPThroughEmail = (userEmail, OTP) => {
+const sendOTPThroughEmail = async (userEmail, OTP) => {
+  console.log(userEmail);
   let mailOptions = {
     from: "manas.agarwal1604@gmail.com",
     to: userEmail,
@@ -28,18 +29,20 @@ const sendOTPThroughEmail = (userEmail, OTP) => {
     text: `Your OTP for email verification : ${OTP}`,
   };
 
-  transporter.sendMail(mailOptions, (error, info) => {
+  let statusOfMail;
+  await transporter.sendMail(mailOptions, (error, info) => {
     if (error) {
       console.error("Error occurred:", error);
-      if (error.code === "EENVELOPE") { //if email
+      if (error.code === "EENVELOPE") {
         console.log("email address is invalid or does not exists");
-        return false;
       }
+      statusOfMail = false;
     } else {
       console.log("Email sent:", info.response);
-      return true;
+      statusOfMail = true;
     }
   });
+  return statusOfMail;
 };
 
 export { generateOTP, sendOTPThroughEmail };
