@@ -29,8 +29,16 @@ const addNewProduct = asyncHandler(async (req, res) => {
 
   // console.log(req.body);
 
-  const { productName, companyName, category, price, stock } = req.body;
-  if (!productName || !companyName || !category || !price || !stock) {
+  const { productName, companyName, category, price, stock, description } =
+    req.body;
+  if (
+    !productName ||
+    !companyName ||
+    !category ||
+    !price ||
+    !stock ||
+    !description
+  ) {
     throw new ApiError(401, "All fields required!!!");
   }
 
@@ -86,6 +94,7 @@ const addNewProduct = asyncHandler(async (req, res) => {
     category,
     price,
     stock,
+    description,
     productImages: productImageCloudinaryURL,
   });
 
@@ -164,7 +173,7 @@ const getProductsByCategory = asyncHandler(async (req, res) => {
 
 const orderProduct = asyncHandler(async (req, res) => {
   const { product_id, quantity } = req.body;
-  console.log( product_id, quantity);
+  console.log(product_id, quantity);
   if (!product_id || !quantity) {
     throw new ApiError(401, "all fields required!!");
   }
@@ -255,7 +264,9 @@ const addToCart = asyncHandler(async (req, res) => {
     throw new ApiError(401, "product_id is required");
   }
 
-  const product = await Product.findById({ _id: product_id });
+  const product = await Product.findById({ _id: product_id }).select(
+    "--stock --owner"
+  );
 
   if (!product) {
     throw new ApiError(401, "no such product exists with product_id");
@@ -263,7 +274,7 @@ const addToCart = asyncHandler(async (req, res) => {
 
   const exists = await Cart.findOne({ product_id: product_id });
 
-  if (Object.keys(exists).length != 0) {
+  if (exists) {
     return res
       .status(201)
       .json(new ApiResponse(201, "product is already added to cart"));
@@ -347,6 +358,7 @@ const myOrders = asyncHandler(async (req, res) => {
         userOrder: 1, // actually here 1 means the same see quantity
         quantity: "$quantity", //'$' sign
         address: 1,
+        description: 1,
         yourDeliveryBoy: "$deliveryBoyOrder.yourDeliveryBoy",
       },
     },
@@ -361,6 +373,54 @@ const myOrders = asyncHandler(async (req, res) => {
   return res
     .status(201)
     .json(new ApiResponse(201, orders, "user orders fetched successfully"));
+});
+
+const myCart = asyncHandler(async (req, res) => {
+  const user = req.user;
+  if (!user) {
+    throw new ApiError(401, "invalid request");
+  }
+  const myCartProducts = await Cart.aggregate([
+    {
+      $match: {
+        user_id: user?._id,
+      },
+    },
+    {
+      $lookup: {
+        from: "products",
+        localField: "product_id",
+        foreignField: "_id",
+        as: "cartProducts",
+        pipeline: [
+          {
+            $project: {
+              stock: 0,
+              owner: 0,
+            },
+          },
+        ],
+      },
+    },
+    {
+      $unwind: "$cartProducts",
+    },
+  ]);
+  if (myCartProducts.length === 0) {
+    return res
+      .status(201)
+      .json(new ApiResponse(201, "Current your Cart is empty."));
+  }
+
+  res
+    .status(201)
+    .json(
+      new ApiResponse(
+        201,
+        myCartProducts,
+        "your cart product fetched successfully"
+      )
+    );
 });
 
 const getByProductName = asyncHandler(async (req, res) => {
@@ -465,6 +525,7 @@ const updateProductDetails = asyncHandler(async (req, res) => {
     oldCompanyName,
     newProductName,
     newCompanyName,
+    description,
     category,
   } = req.body;
 
@@ -473,7 +534,8 @@ const updateProductDetails = asyncHandler(async (req, res) => {
     !oldProductName ||
     !newCompanyName ||
     !newProductName ||
-    category
+    !category ||
+    !description
   ) {
     throw new ApiError(401, "all fields required");
   }
@@ -502,6 +564,7 @@ const updateProductDetails = asyncHandler(async (req, res) => {
         category: category,
         productName: newProductName,
         companyName: newCompanyName,
+        description : description,
       },
     },
     { new: true }
@@ -535,7 +598,10 @@ const getProductDetails = asyncHandler(async (req, res) => {
   });
 
   if (!ownerProduct) {
-    throw new ApiError(401, "No such product found or theres no product of yours");
+    throw new ApiError(
+      401,
+      "No such product found or theres no product of yours"
+    );
   }
 
   res
@@ -544,7 +610,6 @@ const getProductDetails = asyncHandler(async (req, res) => {
       new ApiResponse(201, ownerProduct, "your product fetched successfully")
     );
 });
-
 
 export {
   addNewProduct,
@@ -557,5 +622,6 @@ export {
   getProductsByCompanyName,
   getByProductName,
   getProductDetails,
-  updateProductDetails
+  updateProductDetails,
+  myCart,
 };

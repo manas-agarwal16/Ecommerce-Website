@@ -10,6 +10,10 @@ const productSchema = new mongoose.Schema(
       type: String,
       require: true,
     },
+    description : {
+      type : String,
+      require : true,
+    },
     companyName: {
       type: String,
       require: true,

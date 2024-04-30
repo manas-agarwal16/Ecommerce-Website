@@ -15,6 +15,7 @@ import {
   getProductsByCompanyName,
   getProductDetails,
   updateProductDetails,
+  myCart,
 } from "../controllers/product.controller.js";
 
 router
@@ -32,4 +33,5 @@ router.route("/get-products-p/:productName").get(getByProductName);
 router.route("/get-products-c/:companyName").get(getProductsByCompanyName);
 router.route("/product-details").get(verifyJWT, getProductDetails);
 router.route("/update-product-details").post(verifyJWT, updateProductDetails);
+router.route("/my-cart").get(verifyJWT, myCart);
 export default router;
