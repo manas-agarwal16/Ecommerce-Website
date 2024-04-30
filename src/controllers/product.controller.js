@@ -7,7 +7,6 @@ import { Cart } from "../models/cart.model.js";
 import mongoose from "mongoose";
 import { uploadOncloudinary } from "../utils/cloudinary.js";
 import { assignToDeliveryBoy } from "../utils/AssignToDeliveryBoy.js";
-import { DeliveryBoy } from "../models/deliveryBoy.model.js";
 
 const categories = [
   "electronics",
