@@ -5,11 +5,12 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { Order } from "../models/order.model.js";
 import { DeliveryBoyOrder } from "../models/deliveryBoyOrder.model.js";
 import { assignToDeliveryBoy } from "../utils/AssignToDeliveryBoy.js";
+import { generateOTP } from "../utils/OTP.js";
+import { sendOTPThroughEmail } from "../utils/OTP.js";
 
 const registerDeliveryBoy = asyncHandler(async (req, res) => {
-  
   const { fullName, email, phnNo, password } = req.body;
-  if (!fullName || !email || !phnNo || !password)  {
+  if (!fullName || !email || !phnNo || !password) {
     throw new ApiError(401, "all fields required");
   }
 
@@ -18,42 +19,77 @@ const registerDeliveryBoy = asyncHandler(async (req, res) => {
     throw new ApiError(409, "email already exists");
   }
 
-  let newDeliveryBoY = new DeliveryBoy({
+  const OTP = generateOTP();
+
+  await sendOTPThroughEmail(email, OTP)
+    .then(() => {
+      console.log("email sent successfully");
+    })
+    .catch((err) => {
+      throw new ApiError(401, "Invalid Email address");
+    });
+
+  const deliveryBoy = new DeliveryBoy({
     fullName,
-    email,
     phnNo,
+    email: email.toLowerCase(),
     password,
+    OTP: OTP,
   });
 
-  await newDeliveryBoY.save().then(() => {
-    console.log("You are registered as delivery Boy successfully");
-    res
-      .status(201)
-      .json(
-        new ApiResponse(
-          201,
-          newDeliveryBoY,
-          "You r registered as delivery boy successfully!"
-        )
-      );
-  }).catch(err => {
-    throw new ApiError(501,"error in registering delivery boy.");
-  })
+  await deliveryBoy
+    .save()
+    .then(() => {
+      console.log("delivery boy saved to db successfully");
+    })
+    .catch((err) => {
+      throw new ApiError(501, "error is saving deliveryBoy to db", err);
+    });
+
+  const accessToken = await deliveryBoy.generateAccessToken();
+  const refreshToken = await deliveryBoy.generateRefreshToken();
+
+  const updateRefreshToken = await DeliveryBoy.findByIdAndUpdate(
+    { _id: deliveryBoy._id },
+    { refreshToken: refreshToken }
+  );
+
+  if (!updateRefreshToken) {
+    throw new ApiError(501, "error in updating refreshToken");
+  }
+  const options = {
+    httpOnly: true,
+    secure: true,
+  };
+  return res
+    .status(201)
+    .cookie("accessToken", accessToken, options)
+    .cookie("refreshToken", refreshToken, options)
+    .json(
+      new ApiResponse(200, deliveryBoy, "Enter the OTP for Email verification!")
+    );
 });
 
 const sendOTP = asyncHandler(async (req, res) => {
   const OTP = generateOTP();
   console.log(OTP);
   const deliveryBoy = req.deliveryBoy;
-  const update = await DeliveryBoy.findByIdAndUpdate({ _id: deliveryBoy._id }, { OTP: OTP });
+
+  const update = await DeliveryBoy.findByIdAndUpdate(
+    { _id: deliveryBoy._id },
+    { OTP: OTP }
+  );
   if (!update) {
     throw new ApiError(401, "user not found");
   }
-  console.log(deliveryBoy.email);
-  const result = sendOTPThroughEmail(deliveryBoy.email, OTP);
-  if (!result) {
-    throw new ApiError(401, "email address is invalid or does not exists");
-  }
+
+  await sendOTPThroughEmail(deliveryBoy.email, OTP)
+    .then(() => {
+      console.log("email sent successfully");
+    })
+    .catch((err) => {
+      throw new ApiError(401, "Invalid Email address");
+    });
 
   res.status(201).json(new ApiResponse(201, "OTP has sent to your email"));
 });
@@ -77,16 +113,23 @@ const verifyOTP = asyncHandler(async (req, res) => {
     return res.status(201).json(new ApiResponse(201, "wrong OTP"));
   }
 
-  const resetOTP = await deliveryBoy.findByIdAndUpdate(
+  const resetOTP = await DeliveryBoy.findByIdAndUpdate(
     { _id: deliveryBoy._id },
-    { OTP: null },
+    { $set: { OTP: null, registerStatus: "verified" } },
     { new: true }
   );
   if (!resetOTP) {
     throw new ApiError(501, "error in reseting OTP");
   }
 
-  res.status(201).json(new ApiResponse(201, "OTP verified successfully"));
+  res
+    .status(201)
+    .json(
+      new ApiResponse(
+        201,
+        "OTP verified successfully. u are registered successfully"
+      )
+    );
 });
 
 const loginDeliveryBoy = asyncHandler(async (req, res) => {
@@ -142,7 +185,7 @@ const loginDeliveryBoy = asyncHandler(async (req, res) => {
           accessToken: accessToken,
           refreshToken: refreshToken,
         },
-        "user has logged in successfully"
+        "Delivery Boy has logged in successfully"
       )
     );
 });
@@ -151,6 +194,10 @@ const orderComplete = asyncHandler(async (req, res) => {
   const deliveryBoy = req.deliveryBoy;
   if (!deliveryBoy) {
     throw new ApiError(401, "invalid request");
+  }
+
+  if(deliveryBoy.status === "active"){
+    res.status(201).json(new ApiResponse(201,"You are currently in active mode."))
   }
 
   const deletePlacedOrder = await DeliveryBoyOrder.findOneAndDelete({
@@ -294,7 +341,6 @@ const myDeliveryOrders = asyncHandler(async (req, res) => {
       new ApiResponse(201, yourOrder, "delivery boy order fetched successfully")
     );
 });
- 
 
 export {
   registerDeliveryBoy,
@@ -302,5 +348,5 @@ export {
   orderComplete,
   myDeliveryOrders,
   sendOTP,
-  verifyOTP
+  verifyOTP,
 };

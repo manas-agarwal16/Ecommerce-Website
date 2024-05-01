@@ -16,7 +16,7 @@ router.route("/register").post(registerDeliveryBoy);
 router.route("/login").post(loginDeliveryBoy);
 router.route("/order-complete").post(verifyJWTDeliveryBoy, orderComplete);
 router.route("/orders").get(verifyJWTDeliveryBoy, myDeliveryOrders);
-router.route("/send-otp").get(verifyJWTDeliveryBoy, sendOTP);
+router.route("/resend-otp").get(verifyJWTDeliveryBoy, sendOTP);
 router.route("/verify-otp").post(verifyJWTDeliveryBoy, verifyOTP);
 
 export default router;

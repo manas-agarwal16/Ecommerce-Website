@@ -18,6 +18,11 @@ const deliveryBoySchema = new mongoose.Schema({
     type: String,
     require: true,
   },
+  registerStatus : {
+    type : String,
+    enum : ["pending","verified"],
+    default : "pending"
+  },
   status: {
     type: String,
     default: "active",
@@ -26,6 +31,10 @@ const deliveryBoySchema = new mongoose.Schema({
   refreshToken : {
     type : String,
     default : "",
+  },
+  OTP : {
+    type : Number,
+    default : null
   }
 });
 

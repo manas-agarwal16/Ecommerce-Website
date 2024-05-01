@@ -526,6 +526,7 @@ const updateProductDetails = asyncHandler(async (req, res) => {
     newCompanyName,
     description,
     category,
+    price,
   } = req.body;
 
   if (
@@ -534,7 +535,8 @@ const updateProductDetails = asyncHandler(async (req, res) => {
     !newCompanyName ||
     !newProductName ||
     !category ||
-    !description
+    !description ||
+    !price
   ) {
     throw new ApiError(401, "all fields required");
   }
@@ -563,7 +565,8 @@ const updateProductDetails = asyncHandler(async (req, res) => {
         category: category,
         productName: newProductName,
         companyName: newCompanyName,
-        description : description,
+        description: description,
+        price : price
       },
     },
     { new: true }
@@ -581,22 +584,16 @@ const updateProductDetails = asyncHandler(async (req, res) => {
 });
 
 const getProductDetails = asyncHandler(async (req, res) => {
-  const owner = req.user;
-  const { productName, companyName } = req.body;
-  if (!productName || !companyName) {
-    throw new ApiError(401, "all fields required");
-  }
-  if (!owner) {
-    throw new ApiError(401, "invalid request");
+  const { product_id } = req.body;
+  if (!product_id) {
+    throw new ApiError(401, "product_id required");
   }
 
-  const ownerProduct = await Product.findOne({
-    owner: owner,
-    productName: productName,
-    companyName: companyName,
+  const product = await Product.findOne({
+    _id: product_id,
   });
 
-  if (!ownerProduct) {
+  if (!product) {
     throw new ApiError(
       401,
       "No such product found or theres no product of yours"
@@ -606,7 +603,7 @@ const getProductDetails = asyncHandler(async (req, res) => {
   res
     .status(201)
     .json(
-      new ApiResponse(201, ownerProduct, "your product fetched successfully")
+      new ApiResponse(201, product, "product details fetched successfully")
     );
 });
 
